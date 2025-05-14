@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -10,6 +12,8 @@ import Link from "next/link"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
+import { CommentSection } from "@/components/comment-section"
+import type { CommentData } from "@/components/comment"
 
 export interface PostAuthor {
   name: string
@@ -32,18 +36,31 @@ export interface Post {
   comments: number
   time: string
   userVote?: "up" | "down" | null
+  commentData?: CommentData[]
 }
 
 interface PostCardProps {
   post: Post
   onVote?: (postId: number, direction: "up" | "down" | null) => void
+  onAddComment?: (postId: number, content: string) => void
+  onLikeComment?: (commentId: number) => void
+  onReplyToComment?: (commentId: number, content: string) => void
+  showComments?: boolean
 }
 
-export function PostCard({ post, onVote }: PostCardProps) {
+export function PostCard({
+  post,
+  onVote,
+  onAddComment,
+  onLikeComment,
+  onReplyToComment,
+  showComments = false,
+}: PostCardProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const [currentPost, setCurrentPost] = useState<Post>(post)
   const [isVoting, setIsVoting] = useState(false)
+  const [showCommentsSection, setShowCommentsSection] = useState(showComments)
 
   const handleVote = async (direction: "up" | "down") => {
     if (!user) {
@@ -116,6 +133,24 @@ export function PostCard({ post, onVote }: PostCardProps) {
     }
   }
 
+  const handleAddComment = (postId: number, content: string) => {
+    if (onAddComment) {
+      onAddComment(postId, content)
+    }
+
+    // Update local comment count
+    setCurrentPost((prev) => ({
+      ...prev,
+      comments: prev.comments + 1,
+    }))
+  }
+
+  const handleToggleComments = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowCommentsSection(!showCommentsSection)
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start gap-4 pb-2">
@@ -151,7 +186,7 @@ export function PostCard({ post, onVote }: PostCardProps) {
           </div>
         )}
       </CardContent>
-      <CardFooter className="border-t pt-4">
+      <CardFooter className="flex flex-col border-t pt-4">
         <div className="flex w-full justify-between">
           <div className="flex items-center">
             <div className="flex items-center border rounded-md mr-2">
@@ -159,7 +194,11 @@ export function PostCard({ post, onVote }: PostCardProps) {
                 variant="ghost"
                 size="icon"
                 className={cn("h-8 w-8 rounded-r-none", currentPost.userVote === "up" && "bg-primary/10 text-primary")}
-                onClick={() => handleVote("up")}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleVote("up")
+                }}
                 disabled={isVoting}
               >
                 <ChevronUp className="h-4 w-4" />
@@ -172,28 +211,60 @@ export function PostCard({ post, onVote }: PostCardProps) {
                   "h-8 w-8 rounded-l-none",
                   currentPost.userVote === "down" && "bg-primary/10 text-primary",
                 )}
-                onClick={() => handleVote("down")}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleVote("down")
+                }}
                 disabled={isVoting}
               >
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </div>
-            <Button variant="ghost" size="sm" className="gap-1">
+            <Button variant="ghost" size="sm" className="gap-1" onClick={handleToggleComments}>
               <MessageSquare className="h-4 w-4" />
               <span>{currentPost.comments}</span>
             </Button>
           </div>
           <div className="flex">
-            <Button variant="ghost" size="sm" className="gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+            >
               <Share2 className="h-4 w-4" />
               Share
             </Button>
-            <Button variant="ghost" size="sm" className="gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+            >
               <Bookmark className="h-4 w-4" />
               Save
             </Button>
           </div>
         </div>
+
+        {/* Comments Section */}
+        {showCommentsSection && currentPost.commentData && (
+          <CommentSection
+            postId={currentPost.id}
+            comments={currentPost.commentData}
+            onAddComment={handleAddComment}
+            onLikeComment={onLikeComment || (() => {})}
+            onReplyToComment={onReplyToComment || (() => {})}
+            className="mt-4 pt-4 border-t w-full"
+          />
+        )}
       </CardFooter>
     </Card>
   )

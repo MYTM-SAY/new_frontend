@@ -11,8 +11,59 @@ import { useToast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import Image from "next/image"
 import { PostCard, type Post } from "@/components/post-card"
+import type { CommentData } from "@/components/comment"
 
-// Dummy posts data with userVote field
+// Dummy comments data
+const generateComments = (postId: number): CommentData[] => {
+  const baseComments: CommentData[] = [
+    {
+      id: postId * 100 + 1,
+      author: {
+        name: "Alex Johnson",
+        initials: "AJ",
+      },
+      content: "This is really insightful! I've been working with React for a while and still learned something new.",
+      likes: 5,
+      createdAt: new Date(Date.now() - 3600000 * 2), // 2 hours ago
+      liked: false,
+    },
+    {
+      id: postId * 100 + 2,
+      author: {
+        name: "Jamie Smith",
+        initials: "JS",
+      },
+      content: "Have you tried using the new React hooks API? It's a game changer for state management.",
+      likes: 3,
+      createdAt: new Date(Date.now() - 3600000 * 5), // 5 hours ago
+      liked: false,
+      replies: [
+        {
+          id: postId * 100 + 3,
+          author: {
+            name: "Taylor Wilson",
+            initials: "TW",
+          },
+          content: "I agree! useContext + useReducer is a great combination for many use cases.",
+          likes: 2,
+          createdAt: new Date(Date.now() - 3600000 * 4), // 4 hours ago
+          liked: false,
+        },
+      ],
+    },
+  ]
+
+  // Return different comments for different posts to make it look more realistic
+  if (postId % 2 === 0) {
+    return baseComments.slice(0, 1)
+  } else if (postId % 3 === 0) {
+    return []
+  } else {
+    return baseComments
+  }
+}
+
+// Dummy posts data with userVote field and comments
 const initialPosts: Post[] = [
   {
     id: 1,
@@ -32,6 +83,7 @@ const initialPosts: Post[] = [
     comments: 8,
     time: "2 hours ago",
     userVote: null,
+    commentData: generateComments(1),
   },
   {
     id: 2,
@@ -50,6 +102,7 @@ const initialPosts: Post[] = [
     comments: 15,
     time: "5 hours ago",
     userVote: null,
+    commentData: generateComments(2),
   },
   {
     id: 3,
@@ -69,6 +122,7 @@ const initialPosts: Post[] = [
     comments: 21,
     time: "Yesterday",
     userVote: null,
+    commentData: generateComments(3),
   },
   {
     id: 4,
@@ -87,6 +141,7 @@ const initialPosts: Post[] = [
     comments: 13,
     time: "2 days ago",
     userVote: null,
+    commentData: generateComments(4),
   },
 ]
 
@@ -143,6 +198,7 @@ export default function FeedPage() {
         comments: 0,
         time: "Just now",
         userVote: null,
+        commentData: [],
       }
 
       setPosts([newPost, ...posts])
@@ -154,6 +210,132 @@ export default function FeedPage() {
         description: "Your post has been published successfully.",
       })
     }, 1000)
+  }
+
+  const handleAddComment = (postId: number, content: string) => {
+    setPosts((currentPosts) =>
+      currentPosts.map((post) => {
+        if (post.id === postId) {
+          const newComment: CommentData = {
+            id: Date.now(),
+            author: {
+              name: user?.name || "Anonymous",
+              initials: user?.name?.charAt(0) || "A",
+            },
+            content,
+            likes: 0,
+            createdAt: new Date(),
+            liked: false,
+          }
+
+          const updatedCommentData = post.commentData ? [...post.commentData, newComment] : [newComment]
+
+          return {
+            ...post,
+            comments: post.comments + 1,
+            commentData: updatedCommentData,
+          }
+        }
+        return post
+      }),
+    )
+
+    toast({
+      title: "Comment added",
+      description: "Your comment has been added successfully.",
+    })
+  }
+
+  const handleLikeComment = (commentId: number) => {
+    setPosts((currentPosts) =>
+      currentPosts.map((post) => {
+        if (!post.commentData) return post
+
+        // Function to recursively update comments and their replies
+        const updateComments = (comments: CommentData[]): CommentData[] => {
+          return comments.map((comment) => {
+            if (comment.id === commentId) {
+              // Toggle like status
+              const newLiked = !comment.liked
+              return {
+                ...comment,
+                liked: newLiked,
+                likes: newLiked ? comment.likes + 1 : comment.likes - 1,
+              }
+            }
+
+            // Check if this comment has replies that need updating
+            if (comment.replies) {
+              return {
+                ...comment,
+                replies: updateComments(comment.replies),
+              }
+            }
+
+            return comment
+          })
+        }
+
+        return {
+          ...post,
+          commentData: updateComments(post.commentData),
+        }
+      }),
+    )
+  }
+
+  const handleReplyToComment = (commentId: number, content: string) => {
+    setPosts((currentPosts) =>
+      currentPosts.map((post) => {
+        if (!post.commentData) return post
+
+        // Function to recursively find and update the comment to reply to
+        const updateComments = (comments: CommentData[]): CommentData[] => {
+          return comments.map((comment) => {
+            if (comment.id === commentId) {
+              // Add reply to this comment
+              const newReply: CommentData = {
+                id: Date.now(),
+                author: {
+                  name: user?.name || "Anonymous",
+                  initials: user?.name?.charAt(0) || "A",
+                },
+                content,
+                likes: 0,
+                createdAt: new Date(),
+                liked: false,
+              }
+
+              return {
+                ...comment,
+                replies: comment.replies ? [...comment.replies, newReply] : [newReply],
+              }
+            }
+
+            // Check if this comment has replies that need updating
+            if (comment.replies) {
+              return {
+                ...comment,
+                replies: updateComments(comment.replies),
+              }
+            }
+
+            return comment
+          })
+        }
+
+        return {
+          ...post,
+          comments: post.comments + 1,
+          commentData: updateComments(post.commentData),
+        }
+      }),
+    )
+
+    toast({
+      title: "Reply added",
+      description: "Your reply has been added successfully.",
+    })
   }
 
   if (isLoading) {
@@ -207,7 +389,14 @@ export default function FeedPage() {
 
           {/* Posts */}
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} onVote={handleVote} />
+            <PostCard
+              key={post.id}
+              post={post}
+              onVote={handleVote}
+              onAddComment={handleAddComment}
+              onLikeComment={handleLikeComment}
+              onReplyToComment={handleReplyToComment}
+            />
           ))}
         </div>
 
